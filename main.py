@@ -8,11 +8,6 @@ from random import choice
 from dateutil.parser import parse
 from timezones import whois_timezone_info
 
-# TODO
-#  - Add logging and error checking.
-#  - Gather responses and send them on command.
-#  - New channel for each prompt (as an option).
-
 # Global Constants
 directory = path.dirname(__file__)
 tmpFilePath = directory + "/tmpFile.txt"
