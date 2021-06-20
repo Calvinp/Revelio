@@ -9,7 +9,7 @@ from dateutil.parser import parse
 from timezones import whois_timezone_info
 
 # Global Constants
-directory = path.dirname(__file__)
+directory = path.dirname(path.abspath(__file__))
 tmpFilePath = directory + "/tmpFile.txt"
 promptsPath = directory + "/prompts.json"
 settingsPath = directory + "/settings.json"
