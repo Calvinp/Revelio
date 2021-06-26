@@ -51,18 +51,23 @@ def parseTzAware(timeStr):
 
 # If we're less than this many seconds to the next run, skip today 
 # (to prevent issues caused by now changing during calculations)
-fuzzFactor = 1
+fuzzFactor = 2
 
-# Parses the time string, and returns the next time we will hit
-# the time of day specified (as a timedelta).
-def timeToNextInstance(timeStr):
+# Parses the time string, and returns the
+# next time we will hit the time of day specified
+def nextInstance(timeStr):
     time = parseTzAware(timeStr)
     now = datetime.now()
     time = datetime(year=now.year, month=now.month, day=now.day, hour=time.hour, minute=time.minute, second=time.second)
     timeTo = time - now
     if timeTo < timedelta(seconds=fuzzFactor):
         time += timedelta(days=1)
-    return time - now
+    return time
+
+# Parses the time string, and returns the time until the 
+# next time we will hit the time of day specified (as a timedelta).
+def timeToNextInstance(timeStr):
+    return nextInstance(timeStr) - datetime.now()
 
 # Load settings and save global settings into variables.
 settings = loadSettings()
@@ -72,8 +77,8 @@ DEBUG_MODE = settings["DebugMode"]
 
 # Other setup
 sendHours = 0
-sendMinutes = 0
-sendSeconds = 1
+sendMinutes = 1
+sendSeconds = 0
 # In DEBUG_MODE, we don't send a prompt on a schedule.
 # Send once per minute instead.
 if DEBUG_MODE: 
@@ -94,6 +99,10 @@ class Prompts(commands.Cog):
         self.pauseDays = settings["PauseDays"]
         self.sendRepeatPrompts = settings["SendRepeatPrompts"]
         self.timeToSendPrompt = settings["TimeToSendPrompt"]
+        self.claimedDays = {}
+        # Note - don't take the lock and do something that will take a long time 
+        # or you'll block everyone else from using the bot for shared access.
+        self.lock = asyncio.Lock()
     
     # Sets the number of days until we start sending prompts again.
     def setPauseDays(self, newPauseDays):
@@ -198,20 +207,36 @@ If the file is already a plain text file, or you didn't even attach a file, ping
         await ctx.send(message)
         savePrompts(self.prompts)
         self.makeBackup()
+        
+    # Returns whether we can send a prompt (false if someone else has claimed
+    # the right to send a prompt for the day already).
+    async def canSendPrompt(self):
+        await self.lock.acquire()
+        try:
+            promptDay = nextInstance(self.timeToSendPrompt)
+            promptDayStr = f"{promptDay.year}_{promptDay.month}_{promptDay.day}"
+            if promptDayStr in self.claimedDays and self.claimedDays[promptDayStr]:
+                return False
+            self.claimedDays[promptDayStr] = True
+            return True
+        finally:
+            self.lock.release()
 
     # Version of sendPrompt that runs in a loop (not on command) to send prompts at the set time of day.
     @tasks.loop(seconds=sendSeconds, minutes=sendMinutes, hours=sendHours)
     async def sendPromptLoop(self):
         guild = utils.get(bot.guilds, name=self.guild)
         channel = utils.get(guild.channels, name=self.channel)
-        if not DEBUG_MODE:
-            waitTime = timeToNextInstance(self.timeToSendPrompt)
-            await asyncio.sleep(waitTime.seconds)
-        if (self.pauseDays == 0):
-            await self.doSendPrompt(channel)
-        else:
-            self.decrementPauseDays()
-            await channel.send(f"I am not sending a prompt today because I am paused. I will be paused for {self.pauseDays} more days. You can change the number of days to stay paused by issuing `{PREFIX}pause <days>`, or get a prompt anyway with `{PREFIX}send_prompt`")
+        canSend = await self.canSendPrompt()
+        if canSend: 
+            if not DEBUG_MODE:
+                waitTime = timeToNextInstance(self.timeToSendPrompt)
+                await asyncio.sleep(waitTime.total_seconds())
+            if (self.pauseDays == 0):
+                await self.doSendPrompt(channel)
+            else:
+                self.decrementPauseDays()
+                await channel.send(f"I am not sending a prompt today because I am paused. I will be paused for {self.pauseDays} more days. You can change the number of days to stay paused by issuing `{PREFIX}pause <days>`, or get a prompt anyway with `{PREFIX}send_prompt`")
 
     # Runs before starting the loop (not before each iteration)
     @sendPromptLoop.before_loop 
