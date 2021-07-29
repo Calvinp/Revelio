@@ -1,4 +1,4 @@
-import logging, traceback, asyncio
+import logging, traceback, asyncio, sys
 from discord.ext import commands, tasks
 from discord import utils
 from json import dump, load
@@ -103,6 +103,10 @@ class Prompts(commands.Cog):
         # Note - don't take the lock and do something that will take a long time 
         # or you'll block everyone else from using the bot for shared access.
         self.lock = asyncio.Lock()
+        
+    # Tells us if we are allowed to post; only if ctx is self.guild.
+    def bot_check(self, ctx):
+        return ctx.guild and ctx.guild.name == self.guild
     
     # Sets the number of days until we start sending prompts again.
     def setPauseDays(self, newPauseDays):
@@ -335,4 +339,13 @@ If the file is already a plain text file, or you didn't even attach a file, ping
         await ctx.send("I just made a local backup of my state.")
 
 bot.add_cog(Prompts(bot))
+
+@bot.event
+async def on_command_error(self, error):
+    if isinstance(error, commands.errors.CheckFailure):
+        pass
+    else:
+        print(f"Ignoring exception in command {ctx.command}:", file=sys.stderr)
+        traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
+
 bot.run(TOKEN)
