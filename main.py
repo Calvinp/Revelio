@@ -106,7 +106,7 @@ class Prompts(commands.Cog):
         
     # Tells us if we are allowed to post; only if ctx is self.guild.
     def bot_check(self, ctx):
-        return ctx.guild and ctx.guild.name == self.guild
+        return ctx.guild and ctx.guild.name == self.guild and ctx.channel and ctx.channel.name == self.channel
     
     # Sets the number of days until we start sending prompts again.
     def setPauseDays(self, newPauseDays):
