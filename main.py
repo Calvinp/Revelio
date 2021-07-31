@@ -107,7 +107,8 @@ class Prompts(commands.Cog):
         self.sendPromptLoop.start()
         self.warnThreshold = settings["WarnThreshold"]
         self.guild = settings["DiscordGuild"]
-        self.channel = settings["DiscordChannel"]
+        self.commandChannel = settings["CommandChannel"]
+        self.promptChannel = settings["PromptChannel"]
         self.pauseDays = settings["PauseDays"]
         self.sendRepeatPrompts = settings["SendRepeatPrompts"]
         self.timeToSendPrompt = settings["TimeToSendPrompt"]
@@ -119,7 +120,7 @@ class Prompts(commands.Cog):
         
     # Tells us if we are allowed to post; only if ctx is self.guild.
     def bot_check(self, ctx):
-        return ctx.guild and ctx.guild.name == self.guild and ctx.channel and ctx.channel.name == self.channel
+        return ctx.guild and ctx.guild.name == self.guild and ctx.channel and ctx.channel.name == self.commandChannel
     
     # Sets the number of days until we start sending prompts again.
     def setPauseDays(self, newPauseDays):
@@ -244,7 +245,7 @@ If the file is already a plain text file, or you didn't even attach a file, ping
     async def sendPromptLoop(self):
         try:
             guild = utils.get(bot.guilds, name=self.guild)
-            channel = utils.get(guild.channels, name=self.channel)
+            channel = utils.get(guild.channels, name=self.promptChannel)
             canSend = await self.canSendPrompt()
             if canSend: 
                 if not DEBUG_MODE:
@@ -269,7 +270,10 @@ If the file is already a plain text file, or you didn't even attach a file, ping
         
     @commands.command(name="send_prompt", help="Forces me to send a prompt now, even if it's not on schedule. This does not interrupt my regular schedule.")
     async def sendPromptCommand(self, ctx: commands.Context):
-        await self.doSendPrompt(ctx)
+        promptChannel = utils.get(ctx.guild.channels, name=self.promptChannel)
+        await self.doSendPrompt(promptChannel)
+        if self.promptChannel != ctx.channel.name:
+            await ctx.send(f"Sent a prompt to {promptChannel.mention}")
         
     @commands.command(name="prompts_left", help="Replies with the number of prompts I have left until I will have to start repeating prompts.")
     async def promptsLeft(self, ctx: commands.Context):
@@ -355,6 +359,16 @@ If the file is already a plain text file, or you didn't even attach a file, ping
     async def makeBackupCmd(self, ctx: commands.Context):
         self.makeBackup()
         await ctx.send("I just made a local backup of my state.")
+        
+    @commands.command(name="prompt_channel_test", help="Sends a test message to the prompt channel to show that it works.")
+    async def promptChannelTest(self, ctx: commands.Context):
+        try:
+            promptChannel = utils.get(ctx.guild.channels, name=self.promptChannel)
+            await promptChannel.send("This is a test.")
+            if self.promptChannel != ctx.channel.name:
+                await ctx.send(f"Sent a test message to {promptChannel.mention}.")
+        except:
+            await ctx.send(f"Failed to send message to #{self.promptChannel}.")
 
 bot.add_cog(Prompts(bot))
 
