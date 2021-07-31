@@ -10,6 +10,7 @@ Prompts are not provided. It is expected that you will provide them.
 To facilitate this, the `new_prompts` command allows you to add new prompts. 
 It can take a list of prompts (one per line, no special characters) as either part of the same discord message as the command, or a plain-text file uploaded in the same message as the command.
 It can read through Discord spoilers, so you can upload the new prompts without others who would rather wait until the day it's posted seeing them in their feed.
+You can set a command channel and a prompt channel. They can be the same for convenience, or different to separate bot interaction from reflection.
 
 When the bot starts running out of prompts, it will send a warning with each prompt so that you know to add more. The threshold at which the warning will be sent is configurable.
 When the bot runs out of prompts completely, it can start repeating old prompts. It can be configured not to do this using the `set_send_repeat_prompts` command.
@@ -36,6 +37,7 @@ The bot will automatically send a prompt once per day. In addition, the followin
 * `make_backup` - Makes a local backup of the bot's prompt database and settings. Settings contains the Discord Token secret, so it cannot send you the backup.
 * `ping` - Replies `Pong` so you know the bot is up.
 * `test` - Replies with information about the server the bot is connected to.
+* `prompt_channel_test` - Posts a test message to the prompt channel to verify that it is set properly.
 
 ## Setup the Bot
 
@@ -52,7 +54,8 @@ pip install python-dateutil
 {
     "DiscordToken": "(Your Token)",
     "DiscordGuild": "(Your Server Name)",
-    "DiscordChannel": "prompts",
+    "PromptChannel": "revelio",
+    "CommandChannel": "revelio-cmd",
     "CommandPrefix": ".",
     "TimeToSendPrompt": "12:00am EDT",
     "PauseDays": 0,
