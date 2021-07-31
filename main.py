@@ -14,6 +14,7 @@ tmpFilePath = directory + "/tmpFile.txt"
 promptsPath = directory + "/prompts.json"
 settingsPath = directory + "/settings.json"
 backupsPath = directory + "/backups"
+logPath = directory + "/log.txt"
 newPromptsHelp = """
     Inputs new prompts. I can accept prompts in two ways:
     1. A plain-text file (As you would create in Notepad - *not* an MS Word file), with each prompt on its own line.
@@ -75,6 +76,16 @@ TOKEN = settings["DiscordToken"]
 PREFIX = settings["CommandPrefix"]
 DEBUG_MODE = settings["DebugMode"]
 
+# Set up logging
+logLevel = logging.WARNING
+if DEBUG_MODE:
+    logLevel = logging.DEBUG
+logging.basicConfig(
+    filename=logPath, 
+    level=logLevel,
+    format="%(asctime)s %(levelname)-8s %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S")
+
 # Other setup
 sendHours = 0
 sendMinutes = 1
@@ -85,6 +96,7 @@ if DEBUG_MODE:
     sendHours = 0
     sendMinutes = 1
     sendSeconds = 0
+    
 bot = commands.Bot(command_prefix=PREFIX)
 startupTime = datetime.now()
 
@@ -103,6 +115,7 @@ class Prompts(commands.Cog):
         # Note - don't take the lock and do something that will take a long time 
         # or you'll block everyone else from using the bot for shared access.
         self.lock = asyncio.Lock()
+        logging.debug("Bot started.")
         
     # Tells us if we are allowed to post; only if ctx is self.guild.
     def bot_check(self, ctx):
@@ -229,18 +242,23 @@ If the file is already a plain text file, or you didn't even attach a file, ping
     # Version of sendPrompt that runs in a loop (not on command) to send prompts at the set time of day.
     @tasks.loop(seconds=sendSeconds, minutes=sendMinutes, hours=sendHours)
     async def sendPromptLoop(self):
-        guild = utils.get(bot.guilds, name=self.guild)
-        channel = utils.get(guild.channels, name=self.channel)
-        canSend = await self.canSendPrompt()
-        if canSend: 
-            if not DEBUG_MODE:
-                waitTime = timeToNextInstance(self.timeToSendPrompt)
-                await asyncio.sleep(waitTime.total_seconds())
-            if (self.pauseDays == 0):
-                await self.doSendPrompt(channel)
-            else:
-                self.decrementPauseDays()
-                await channel.send(f"I am not sending a prompt today because I am paused. I will be paused for {self.pauseDays} more days. You can change the number of days to stay paused by issuing `{PREFIX}pause <days>`, or get a prompt anyway with `{PREFIX}send_prompt`")
+        try:
+            guild = utils.get(bot.guilds, name=self.guild)
+            channel = utils.get(guild.channels, name=self.channel)
+            canSend = await self.canSendPrompt()
+            if canSend: 
+                if not DEBUG_MODE:
+                    waitTime = timeToNextInstance(self.timeToSendPrompt)
+                    await asyncio.sleep(waitTime.total_seconds())
+                if (self.pauseDays == 0):
+                    await self.doSendPrompt(channel)
+                else:
+                    self.decrementPauseDays()
+                    await channel.send(f"I am not sending a prompt today because I am paused. I will be paused for {self.pauseDays} more days. You can change the number of days to stay paused by issuing `{PREFIX}pause <days>`, or get a prompt anyway with `{PREFIX}send_prompt`")
+        except Exception as e:
+            # Note - may lead to logging the erorr twice.
+            # But twice is better than no times.
+            logging.error(e, exc_info=True)
 
     # Runs before starting the loop (not before each iteration)
     @sendPromptLoop.before_loop 
@@ -345,7 +363,9 @@ async def on_command_error(self, error):
     if isinstance(error, commands.errors.CheckFailure):
         pass
     else:
-        print(f"Ignoring exception in command {ctx.command}:", file=sys.stderr)
+        print(f"Ignoring exception:", file=sys.stderr)
         traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
+        logging.error(traceback.format_exception(type(error), error, error.__traceback__), exc_info=True)
+        
 
 bot.run(TOKEN)
